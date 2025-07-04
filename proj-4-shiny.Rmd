@@ -1,0 +1,123 @@
+---
+title: "proj-4-shiny"
+author: "Ian Chang"
+output:
+  html_document
+urlcolor: blue
+fontsize: 12pt
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  warning = FALSE,
+  message = FALSE,
+  echo = TRUE
+)
+q <- 0
+```
+
+```{r}
+library(tidyverse)
+library(ggthemes)
+library(rvest)
+library(plotly)
+library(shiny)
+library(shinythemes)
+library(bslib)
+```
+
+
+
+## load/combine data
+
+```{r, fig.width = 12}
+
+combined_disaster_data <- read_csv("combined_disaster_data.csv")
+disaster_summary <- combined_disaster_data %>%
+  group_by(Year, Disaster) %>%
+  summarize(Count = n(), .groups = "drop") %>%
+  complete(Year, Disaster, fill = list(Count = 0))
+total_summary <- combined_disaster_data %>%
+  group_by(Year) %>%
+  summarize(Count = n()) %>%
+  mutate(Disaster = "All Disasters") 
+
+plot_data <- bind_rows(disaster_summary, total_summary)
+write_csv(plot_data, "plot_data.csv")
+disaster_colors <- c(
+  "All Disasters" = "black",
+  "Flooding" = "dodgerblue",
+  "Hurricane" = "orange",
+  "Tropical Cyclone" = "seagreen",
+  "Drought" = "darkgoldenrod2",
+  "Wildfire" = "green4",
+  "Winter Storm" = "lightskyblue3",
+  "Freeze" = "powderblue"
+)
+
+```
+
+
+## define ui
+
+```{r}
+ui <- fluidPage(
+  theme = bs_theme(bootswatch = "cerulean"),
+  titlePanel("Trends in U.S. Billion-Dollar Disasters (1980–2024)"),
+  sidebarLayout(
+    sidebarPanel(
+      checkboxGroupInput(
+        inputId = "disaster_types",
+        label = "Select Disaster Types:",
+        choices = unique(plot_data$Disaster),
+        selected = unique(plot_data$Disaster)
+      )
+    ),
+    mainPanel(
+      plotlyOutput("disaster_plot")
+    )
+  )
+)
+
+
+```
+
+## define server
+
+```{r}
+
+
+server <- function(input, output) {
+  output$disaster_plot <- renderPlotly({
+    filtered_data <- plot_data %>%
+      filter(Disaster %in% input$disaster_types)
+    billion_disasters <- ggplot(filtered_data, aes(x = Year, y = Count)) +
+      geom_line(aes(color = Disaster), linewidth = 1) +
+      scale_color_manual(values = disaster_colors) +
+      scale_x_continuous(breaks = seq(1980, 2024, by = 5)) +
+      labs(
+        x = "Year",
+        y = "Number of Events"
+      ) +
+      theme_minimal(base_size = 12) +
+      theme(
+        plot.title = element_text(face = "bold", size = 24),
+        panel.grid = element_blank(),
+        legend.position = "none",
+      )
+    
+    ggplotly(billion_disasters) %>%
+      layout(yaxis = list(autorange = TRUE),
+             legend = list(title = list(text = "Disaster Type")))
+  })
+}
+
+```
+## run app
+```{r}
+shinyApp(ui = ui, server = server)
+```
+
+
+
+
